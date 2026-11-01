@@ -1,0 +1,31 @@
+name: Release
+# Push a tag such as v1.0.0 to publish a release.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and package
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          VERSION="$version" bash scripts/build-app.sh
+          ditto -c -k --keepParent Pulse.app "Pulse-$version.zip"
+          cp "Pulse-$version.zip" Pulse.zip
+          shasum -a 256 "Pulse-$version.zip" | sed "s|  .*|  Pulse-$version.zip|" > "Pulse-$version.zip.sha256"
+          shasum -a 256 Pulse.zip > Pulse.zip.sha256
+          cat Pulse.zip.sha256
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" --title "Pulse $version" --generate-notes \
+            "Pulse-$version.zip" "Pulse-$version.zip.sha256" Pulse.zip Pulse.zip.sha256
