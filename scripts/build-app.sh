@@ -9,12 +9,14 @@ APP=Pulse.app
 
 # Universal (arm64 + x86_64) when the toolchain can do it, otherwise this Mac's architecture.
 ARCHS="arm64"
-if swift build -c release --arch arm64 --arch x86_64 >/tmp/pulse-universal.log 2>&1; then
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+if swift build -c release --arch arm64 --arch x86_64 >"$WORK/universal.log" 2>&1; then
   ARCHS="arm64 x86_64 (universal)"
   BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
 else
   echo "note: universal build is not available with this toolchain; building for $(uname -m) only." >&2
-  tail -3 /tmp/pulse-universal.log >&2 || true
+  tail -3 "$WORK/universal.log" >&2 || true
   swift build -c release
   BIN="$(swift build -c release --show-bin-path)"
 fi
@@ -24,13 +26,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Pulse" "$APP/Contents/MacOS/Pulse"
 
 # Fonts: loaded from Contents/Resources/Fonts (Theme.registerFonts looks there first).
-# The SwiftPM resource bundle is copied too, so the layout also works the way SwiftPM expects.
-cp -R "$BIN/Pulse_Pulse.bundle/Fonts" "$APP/Contents/Resources/Fonts"
-cp -R "$BIN/Pulse_Pulse.bundle" "$APP/Contents/Resources/Pulse_Pulse.bundle"
+# They are copied from the source tree, because the resource bundle's layout differs between
+# the Command Line Tools build (Pulse_Pulse.bundle/Fonts) and Xcode's (Contents/Resources/Fonts).
+cp -R "Sources/Pulse/Resources/Fonts" "$APP/Contents/Resources/Fonts"
 
 # Icon: drawn by the app itself, then scaled into an .icns.
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
 "$APP/Contents/MacOS/Pulse" --icon "$WORK/icon.png"
 ICONSET="$WORK/Pulse.iconset"
 mkdir "$ICONSET"
